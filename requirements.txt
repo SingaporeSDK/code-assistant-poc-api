@@ -1,0 +1,43 @@
+# ----------------------------------------------------------------------
+# 1. CORE API FRAMEWORK
+# FastAPI is the high-performance framework for the backend API server.
+# Uvicorn is the ASGI server that runs the application.
+# ----------------------------------------------------------------------
+fastapi>=0.104.1
+uvicorn[standard]>=0.23.2
+
+# ----------------------------------------------------------------------
+# 2. RAG ORCHESTRATION FRAMEWORKS
+# We will use LangChain (or LlamaIndex) for document loading, chunking,
+# and coordinating the RAG process.
+# ----------------------------------------------------------------------
+langchain-core>=0.1.0
+langchain-community>=0.0.1
+langchain-openai>=0.0.1 # For using OpenAI LLM/Embeddings (Optional)
+
+# ----------------------------------------------------------------------
+# 3. EMBEDDING MODEL & VECTOR STORE
+# sentence-transformers for local/HuggingFace embeddings.
+# chromadb for the lightweight, local vector database.
+# langchain-chroma provides the LangChain integration with ChromaDB.
+# ----------------------------------------------------------------------
+sentence-transformers>=2.2.2 # For local embeddings (e.g., all-MiniLM-L6-v2)
+chromadb>=0.4.15
+langchain-chroma>=0.1.0
+pydantic>=2.5.2 # Used by FastAPI, LangChain, and ChromaDB
+
+# ----------------------------------------------------------------------
+# 4. UTILITIES & DATA HANDLING
+# python-dotenv for managing environment variables (API keys).
+# pydantic is also used here for data validation across the system.
+# The 'tiktoken' library is for token counting (used by OpenAI models).
+# ----------------------------------------------------------------------
+python-dotenv>=1.0.0
+tiktoken>=0.5.1 
+
+# ----------------------------------------------------------------------
+# 5. CODE PROCESSING (CRITICAL FOR CODE ASSISTANT)
+# Pygment is a code syntax highlighter and parser which helps with
+# intelligent code chunking for many languages.
+# ----------------------------------------------------------------------
+Pygments>=2.17.2

@@ -1,0 +1,181 @@
+import os
+import subprocess
+from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+
+# Load environment variables from .env file FIRST (before importing rag_chain)
+load_dotenv()
+
+# Check if key is loaded. This must be done before rag_chain initializes OpenAI
+if not os.getenv("OPENAI_API_KEY"):
+    raise EnvironmentError("OPENAI_API_KEY environment variable not set. Please check your .env file.")
+
+# Import rag_chain AFTER loading .env so the API key is available during initialization
+from .rag_chain import get_answer, list_all_document_sources
+
+app = FastAPI(title="Code Assistant API")
+
+# Global variables to track indexing status
+indexing_in_progress = False
+indexing_output = []  # Store terminal output lines
+indexing_complete = False
+
+# Add CORS middleware for frontend connection
+# The persistent 400 Bad Request on OPTIONS suggests a conflict with the "*" wildcard.
+# We explicitly list required methods to force the CORS handshake.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["POST", "GET", "OPTIONS"], # <-- EXPLICITLY LISTING METHODS
+    allow_headers=["*"],
+)
+
+class Question(BaseModel):
+    question: str
+
+class IndexRequest(BaseModel):
+    codebase_path: str
+    collection: str = "code_assistant_index"
+    chunk_size: int = 1000
+    chunk_overlap: int = 100
+
+@app.get("/")
+def home():
+    """Serve the frontend HTML"""
+    return FileResponse("frontend/index.html")
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint"""
+    return {"status": "ok", "message": "Code Assistant Backend is running."}
+
+@app.post("/index")
+async def trigger_indexing(request: IndexRequest, background_tasks: BackgroundTasks):
+    """Trigger indexing of a codebase"""
+    global indexing_in_progress
+    
+    if indexing_in_progress:
+        raise HTTPException(status_code=429, detail="Indexing already in progress")
+    
+    # Validate path
+    if not os.path.exists(request.codebase_path):
+        raise HTTPException(status_code=400, detail=f"Path does not exist: {request.codebase_path}")
+    
+    if not os.path.isdir(request.codebase_path):
+        raise HTTPException(status_code=400, detail=f"Path is not a directory: {request.codebase_path}")
+    
+    # Run indexing in background
+    indexing_in_progress = True
+    background_tasks.add_task(run_indexing_task, request)
+    
+    return {
+        "status": "started",
+        "message": f"Indexing started for {request.codebase_path}. This may take a few minutes."
+    }
+
+def run_indexing_task(request: IndexRequest):
+    """Background task to run the indexing script"""
+    global indexing_in_progress, indexing_output, indexing_complete
+    
+    try:
+        # Clear previous output
+        indexing_output = []
+        indexing_complete = False
+        
+        start_msg = f"{'='*60}\nStarting indexing: {request.codebase_path}\n{'='*60}"
+        print(start_msg)
+        indexing_output.append(start_msg)
+        
+        # Build the command
+        cmd = [
+            "python3.9",
+            "scripts/index_codebase.py",
+            request.codebase_path,
+            "--collection", request.collection,
+            "--chunk-size", str(request.chunk_size),
+            "--chunk-overlap", str(request.chunk_overlap)
+        ]
+        
+        # Run the indexing script with real-time output capture
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            cwd=os.getcwd()
+        )
+        
+        # Capture output line by line
+        for line in process.stdout:
+            line = line.rstrip()
+            if line:  # Only add non-empty lines
+                print(line)
+                indexing_output.append(line)
+        
+        process.wait()
+        
+        if process.returncode == 0:
+            success_msg = "\n✅ Indexing completed successfully!"
+            print(success_msg)
+            indexing_output.append(success_msg)
+            indexing_complete = True
+        else:
+            error_msg = f"\n❌ Indexing failed with exit code {process.returncode}"
+            print(error_msg)
+            indexing_output.append(error_msg)
+            
+    except Exception as e:
+        error_msg = f"\n❌ Indexing error: {e}"
+        print(error_msg)
+        indexing_output.append(error_msg)
+    finally:
+        indexing_in_progress = False
+
+@app.get("/index/status")
+def indexing_status():
+    """Check if indexing is in progress and get status"""
+    global indexing_in_progress, indexing_complete
+    return {
+        "in_progress": indexing_in_progress,
+        "completed": indexing_complete,
+        "output_lines": len(indexing_output)
+    }
+
+@app.get("/index/output")
+def get_indexing_output():
+    """Get the current indexing output"""
+    global indexing_output
+    return {
+        "output": indexing_output,
+        "in_progress": indexing_in_progress,
+        "completed": indexing_complete
+    }
+
+@app.post("/ask")
+async def ask_question(q: Question):
+    """Ask a question about the indexed codebase"""
+    try:
+        # A check to ensure Pydantic model parsing succeeded
+        if not q.question:
+             raise ValueError("Question field is empty in the request body.")
+
+        answer = get_answer(q.question)
+        return {"answer": answer}
+    except Exception as e:
+        # Log the error for debugging purposes in the terminal
+        print(f"--- ERROR PROCESSING /ASK REQUEST ---")
+        print(f"Error Type: {type(e).__name__}")
+        print(f"Error Detail: {e}")
+        print(f"---------------------------------------")
+        return {"error": str(e)}
+
+@app.get("/debug/docs")
+def debug_document_list():
+    """Lists the source metadata for all documents currently in the vector store."""
+    return list_all_document_sources()
