@@ -1,20 +1,22 @@
 import os
+
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 from langchain_chroma import Chroma
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFacePipeline
+from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, pipeline
 
-# --- Configuration ---
-# NOTE: API key should be loaded by FastAPI via main.py using dotenv
-VECTOR_STORE_PATH = "chroma_db"
-COLLECTION_NAME = "code_assistant_index"  # Must match the collection name in index_codebase.py
+LOCAL_VECTOR_STORE_PATH = os.getenv("LOCAL_VECTOR_STORE_PATH", "chroma_db")
+LOCAL_COLLECTION_NAME = os.getenv("LOCAL_COLLECTION_NAME", "code_assistant_local")
+LOCAL_EMBEDDING_MODEL = os.getenv("LOCAL_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+LOCAL_LLM_MODEL = os.getenv("LOCAL_LLM_MODEL", "google/flan-t5-base")
 
-# Initialize global variables, these will hold the loaded RAG components
-# We initialize them to None, and they are loaded during application startup.
 vectorstore = None
 rag_chain = None
+_local_embedder = None
+_local_llm = None
 
-# Define the Prompt Template
 CODE_QA_TEMPLATE = """
 You are an expert software developer AI assistant. Your role is to answer questions about a codebase.
 Use the following context (which consists of code chunks from the codebase) to answer the question.
@@ -35,86 +37,107 @@ ANSWER:
 
 QA_PROMPT = PromptTemplate.from_template(CODE_QA_TEMPLATE)
 
+
+def _get_embedding_model():
+    global _local_embedder
+    if _local_embedder is None:
+        print(f"Loading Hugging Face embedding model: {LOCAL_EMBEDDING_MODEL}")
+        _local_embedder = HuggingFaceEmbeddings(model_name=LOCAL_EMBEDDING_MODEL)
+    return _local_embedder
+
+
+def _get_llm():
+    global _local_llm
+    if _local_llm is None:
+        print(f"Loading local LLM model: {LOCAL_LLM_MODEL}")
+        tokenizer = AutoTokenizer.from_pretrained(LOCAL_LLM_MODEL)
+        model = AutoModelForSeq2SeqLM.from_pretrained(LOCAL_LLM_MODEL)
+        text2text = pipeline(
+            "text2text-generation",
+            model=model,
+            tokenizer=tokenizer,
+            max_length=512,
+            batch_size=1,
+        )
+        _local_llm = HuggingFacePipeline(pipeline=text2text)
+    return _local_llm
+
+
 def initialize_rag_components():
-    """Initializes the vector store and the RAG chain."""
-    global vectorstore
-    global rag_chain
+    """Initializes the vector store and the RAG chain using local models."""
+    global vectorstore, rag_chain
 
-    # --- 1. Initialize Embedding Model ---
-    # The same embedding model used for indexing must be used for retrieval
-    # This is initialized here (after .env is loaded) instead of at module level
-    embedding_model = OpenAIEmbeddings(model="text-embedding-3-small")
-    
-    # --- 2. Load the Vector Store ---
+    embedding_model = _get_embedding_model()
     vectorstore = Chroma(
-        persist_directory=VECTOR_STORE_PATH,
-        collection_name=COLLECTION_NAME,
-        embedding_function=embedding_model
+        persist_directory=LOCAL_VECTOR_STORE_PATH,
+        collection_name=LOCAL_COLLECTION_NAME,
+        embedding_function=embedding_model,
     )
-    print(f"Vector store loaded successfully from {VECTOR_STORE_PATH} (collection: {COLLECTION_NAME})")
+    print(f"Vector store loaded from {LOCAL_VECTOR_STORE_PATH} (collection: {LOCAL_COLLECTION_NAME})")
 
-    # --- 3. Create the RAG Chain ---
-    # The LLM model
-    llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.0)
+    llm = _get_llm()
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 10})
 
-    # Create the RetrievalQA chain
-    # Retrieve more documents (k=10) for better context coverage
-    retriever = vectorstore.as_retriever(
-        search_type="similarity",
-        search_kwargs={"k": 10}
-    )
-    
     rag_chain = RetrievalQA.from_chain_type(
         llm=llm,
         chain_type="stuff",
         retriever=retriever,
         chain_type_kwargs={"prompt": QA_PROMPT},
+        return_source_documents=True,
     )
-    print("RAG chain initialized with retriever (k=10).")
+    print("Local RAG chain initialized (k=10).")
 
 
-def get_answer(question: str) -> str:
-    """Runs the question through the initialized RAG chain."""
+def get_answer(question: str) -> dict:
     if rag_chain is None:
-        return "The RAG system is not initialized. Please check the backend terminal for errors related to the vector store or API key."
+        return {
+            "answer": "The RAG system is not initialized. Please check the backend terminal for errors.",
+            "sources": [],
+        }
 
-    # Run the chain
     result = rag_chain.invoke({"query": question})
-    return result.get("result", "An unknown error occurred during retrieval.")
+    docs = result.get("source_documents", []) or []
+    sources = []
+    for doc in docs:
+        metadata = doc.metadata or {}
+        source_path = metadata.get("source") or "unknown"
+        sources.append(
+            {
+                "source": os.path.basename(source_path),
+                "content": doc.page_content,
+            }
+        )
+
+    return {
+        "answer": result.get("result", "An unknown error occurred during retrieval."),
+        "sources": sources,
+    }
+
 
 def list_all_document_sources() -> list:
-    """Returns the source metadata for all documents in the vector store."""
     if vectorstore is None:
         return [{"error": "Vector store not initialized. Check terminal for loading errors."}]
 
-    # Chroma stores metadata for all documents. We fetch the document IDs and then their metadata.
-    # Note: Chroma's API is not standardized across versions, this approach is robust.
     try:
-        # Fetch up to 1000 IDs (or adjust the limit if needed)
         ids = vectorstore._collection.get(limit=1000, include=['metadatas']).get('ids', [])
-
-        # If no IDs, return empty list
         if not ids:
             return []
 
-        # Get the documents including the metadatas
         results = vectorstore._collection.get(ids=ids, include=['metadatas'])
-
-        # Extract the source from metadata
         sources = []
         for metadata in results.get('metadatas', []):
             if metadata and 'source' in metadata:
-                sources.append({"source": os.path.basename(metadata['source'])}) # Use basename for cleaner output
-
+                sources.append({"source": os.path.basename(metadata['source'])})
         return sources
-
     except Exception as e:
         return [{"error": f"Error loading documents from vector store: {e}"}]
 
-# Initialize RAG components upon module load (during application startup)
+
 try:
     initialize_rag_components()
 except Exception as e:
-    # Print a clear error message if initialization fails, but allow app to start
-    # so we can use the debug endpoint.
-    print(f"\n--- CRITICAL RAG INITIALIZATION ERROR ---\n{e}\n------------------------------------------\n")
+    print(
+        "\n--- CRITICAL RAG INITIALIZATION ERROR ---\n"
+        f"{e}\n"
+        "------------------------------------------\n"
+    )

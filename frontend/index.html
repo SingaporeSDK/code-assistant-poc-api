@@ -102,6 +102,27 @@
         .form-group {
             margin-bottom: 20px;
         }
+        .command-preview {
+            margin-top: 20px;
+        }
+
+        .command-preview label {
+            font-weight: 600;
+            color: #333;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .command-preview pre {
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 16px;
+            border-radius: 10px;
+            font-size: 13px;
+            line-height: 1.6;
+            overflow-x: auto;
+            border: 1px solid #1e293b;
+        }
 
         label {
             display: block;
@@ -238,6 +259,12 @@
             border-left: 4px solid #17a2b8;
         }
 
+        .message-warning {
+            background: #fff3cd;
+            color: #856404;
+            border-left: 4px solid #ffc107;
+        }
+
         .answer-box {
             background: #f8f9fa;
             padding: 20px;
@@ -253,6 +280,40 @@
         .answer-box.show {
             display: block;
             animation: slideIn 0.3s;
+        }
+
+        .answer-box h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .source-list {
+            margin-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            padding-top: 15px;
+        }
+
+        .source-item {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 12px 15px;
+            margin-bottom: 12px;
+        }
+
+        .source-item strong {
+            color: #333;
+        }
+
+        .source-item pre {
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 8px;
+            white-space: pre-wrap;
+            font-size: 13px;
+            line-height: 1.5;
         }
 
         .terminal-box {
@@ -302,6 +363,16 @@
             padding-bottom: 10px;
             border-bottom: 1px solid #333;
             color: #888;
+        }
+
+        .terminal-mode-pill {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #fff;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            letter-spacing: 0.5px;
         }
 
         .terminal-title {
@@ -452,7 +523,7 @@
         <!-- Indexing Card -->
         <div class="card">
             <h2>📁 Index Your Codebase</h2>
-            
+
             <div class="form-group">
                 <label for="codebasePath">Codebase Path *</label>
                 <input 
@@ -475,8 +546,8 @@
                         <input 
                             type="text" 
                             id="collectionName" 
-                            placeholder="code_assistant_index"
-                            value="code_assistant_index"
+                            placeholder="code_assistant_local"
+                            value="code_assistant_local"
                         >
                     </div>
 
@@ -519,6 +590,15 @@
                 </div>
             </div>
 
+            <div class="command-preview">
+                <label>Equivalent CLI Command</label>
+                <pre id="commandPreview">python3.9 scripts/index_codebase_local.py ./my_codebase/mycarhub/src \
+  --collection code_assistant_local \
+  --chunk-size 1000 \
+  --chunk-overlap 100 \
+  --output ./chroma_db_local</pre>
+            </div>
+
             <button class="btn btn-primary" onclick="startIndexing()" id="indexBtn">
                 ▶️ Start Indexing
             </button>
@@ -539,6 +619,7 @@
                     <div class="terminal-title">
                         <span>📟</span>
                         <span>Indexing Terminal Output</span>
+                        <span id="terminalModeLabel" class="terminal-mode-pill">LOCAL</span>
                     </div>
                 </div>
                 <div id="terminalContent"></div>
@@ -564,17 +645,40 @@
             <div id="askMessage" class="message"></div>
             <div id="answerBox" class="answer-box"></div>
         </div>
-
     </div>
 
     <script>
         const API_BASE = 'http://localhost:8000';
+        const INDEX_SCRIPT = 'scripts/index_codebase.py';
+        const DEFAULT_COLLECTION = 'code_assistant_local';
+        const DEFAULT_OUTPUT = './chroma_db';
         let outputPollingInterval = null;
+        let statusMonitorInterval = null;
 
-        // Check server status on load
+        const collectionInputEl = document.getElementById('collectionName');
+        const pathInputEl = document.getElementById('codebasePath');
+        const chunkSizeEl = document.getElementById('chunkSize');
+        const chunkOverlapEl = document.getElementById('chunkOverlap');
+
+        if (collectionInputEl) {
+            collectionInputEl.dataset.userEdited = 'false';
+            collectionInputEl.dataset.currentDefault = collectionInputEl.value || DEFAULT_COLLECTION;
+            collectionInputEl.addEventListener('input', () => {
+                collectionInputEl.dataset.userEdited = 'true';
+                updateCommandPreview();
+            });
+        }
+
+        [pathInputEl, chunkSizeEl, chunkOverlapEl].forEach((input) => {
+            if (input) {
+                input.addEventListener('input', updateCommandPreview);
+            }
+        });
+
         window.addEventListener('load', () => {
             checkServerStatus();
             loadStats();
+            updateCommandPreview();
         });
 
         function toggleAdvanced(e) {
@@ -600,21 +704,8 @@
         }
 
         async function loadStats() {
-            try {
-                const response = await fetch(`${API_BASE}/debug/docs`);
-                const docs = await response.json();
-                
-                if (Array.isArray(docs) && !docs[0]?.error) {
-                    document.getElementById('docCount').textContent = docs.length;
-                } else {
-                    document.getElementById('docCount').textContent = '0';
-                }
-                
-                document.getElementById('collectionStatus').textContent = 'code_assistant_index';
-            } catch (error) {
-                document.getElementById('docCount').textContent = 'Error';
-                document.getElementById('collectionStatus').textContent = 'Error';
-            }
+            // Stats card was removed; keep placeholder for future use
+            return;
         }
 
         function showMessage(elementId, text, type) {
@@ -630,8 +721,6 @@
 
         function formatTerminalLine(line) {
             let className = 'terminal-line';
-            
-            // Color code based on content
             if (line.includes('✓') || line.includes('✅') || line.includes('SUCCESS')) {
                 className += ' success';
             } else if (line.includes('❌') || line.includes('ERROR') || line.includes('Error')) {
@@ -639,7 +728,6 @@
             } else if (line.includes('⚠️') || line.includes('WARNING') || line.includes('Warning')) {
                 className += ' warning';
             }
-            
             return `<div class="${className}">${escapeHtml(line)}</div>`;
         }
 
@@ -653,40 +741,24 @@
             try {
                 const response = await fetch(`${API_BASE}/index/output`);
                 const data = await response.json();
-                
                 const terminalBox = document.getElementById('terminalBox');
                 const terminalContent = document.getElementById('terminalContent');
-                
                 if (data.output && data.output.length > 0) {
                     terminalBox.classList.add('show');
-                    
-                    // Update content
                     let html = '';
                     data.output.forEach(line => {
                         html += formatTerminalLine(line);
                     });
-                    
-                    // Add cursor if still in progress
                     if (data.in_progress) {
                         html += '<span class="terminal-cursor"></span>';
                     }
-                    
                     terminalContent.innerHTML = html;
-                    
-                    // Auto-scroll to bottom
                     terminalBox.scrollTop = terminalBox.scrollHeight;
                 }
-                
-                // Stop polling if completed
                 if (data.completed || !data.in_progress) {
                     if (outputPollingInterval) {
                         clearInterval(outputPollingInterval);
                         outputPollingInterval = null;
-                    }
-                    
-                    // Reload stats when indexing completes
-                    if (data.completed) {
-                        setTimeout(() => loadStats(), 2000);
                     }
                 }
             } catch (error) {
@@ -695,15 +767,10 @@
         }
 
         function startOutputPolling() {
-            // Clear any existing polling
             if (outputPollingInterval) {
                 clearInterval(outputPollingInterval);
             }
-            
-            // Immediate update
             updateTerminalOutput();
-            
-            // Poll every second
             outputPollingInterval = setInterval(updateTerminalOutput, 1000);
         }
 
@@ -714,49 +781,88 @@
             }
         }
 
-        async function startIndexing() {
-            const path = document.getElementById('codebasePath').value;
-            const collection = document.getElementById('collectionName').value;
-            const chunkSize = document.getElementById('chunkSize').value;
-            const chunkOverlap = document.getElementById('chunkOverlap').value;
+        function monitorIndexingStatus() {
+            if (statusMonitorInterval) {
+                clearInterval(statusMonitorInterval);
+            }
+            statusMonitorInterval = setInterval(async () => {
+                try {
+                    const resp = await fetch(`${API_BASE}/index/status`);
+                    const status = await resp.json();
+                    if (!status.in_progress) {
+                        clearInterval(statusMonitorInterval);
+                        statusMonitorInterval = null;
+                        const indexBtn = document.getElementById('indexBtn');
+                        indexBtn.disabled = false;
+                        indexBtn.innerHTML = '▶️ Start Indexing';
+                        document.getElementById('indexProgress').classList.remove('active');
+                        if (status.completed) {
+                            showMessage('indexMessage', '✅ Indexing completed successfully!', 'success');
+                        } else {
+                            showMessage('indexMessage', '⚠️ Indexing stopped. Check terminal output for details.', 'warning');
+                        }
+                    }
+                } catch (err) {
+                    console.error('Status polling error', err);
+                }
+            }, 2000);
+        }
 
+        function updateCommandPreview() {
+            const previewEl = document.getElementById('commandPreview');
+            if (!previewEl) return;
+            const path = pathInputEl?.value || './path/to/codebase';
+            const collection = collectionInputEl?.value || DEFAULT_COLLECTION;
+            const chunkSize = chunkSizeEl?.value || '1000';
+            const chunkOverlap = chunkOverlapEl?.value || '100';
+            let cmd = `python3.9 ${INDEX_SCRIPT} "${path}" \
+  --collection ${collection} \
+  --chunk-size ${chunkSize} \
+  --chunk-overlap ${chunkOverlap} \
+  --output ${DEFAULT_OUTPUT}`;
+            previewEl.textContent = cmd;
+        }
+
+        async function startIndexing() {
+            const path = pathInputEl.value;
+            const collection = collectionInputEl.value;
+            const chunkSize = chunkSizeEl.value;
+            const chunkOverlap = chunkOverlapEl.value;
             if (!path) {
                 showMessage('indexMessage', '❌ Please enter a codebase path', 'error');
                 return;
             }
-
             const indexBtn = document.getElementById('indexBtn');
             const progress = document.getElementById('indexProgress');
             const terminalBox = document.getElementById('terminalBox');
             const terminalContent = document.getElementById('terminalContent');
-            
+            stopOutputPolling();
+            if (statusMonitorInterval) {
+                clearInterval(statusMonitorInterval);
+                statusMonitorInterval = null;
+            }
             indexBtn.disabled = true;
             indexBtn.innerHTML = '<span class="spinner"></span> Indexing...';
             progress.classList.add('active');
             hideMessage('indexMessage');
-            
-            // Show terminal and clear previous output
             terminalBox.classList.add('show');
             terminalContent.innerHTML = '<div class="terminal-line">Initializing...</div><span class="terminal-cursor"></span>';
-
             try {
                 const response = await fetch(`${API_BASE}/index`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         codebase_path: path,
-                        collection: collection,
+                        collection: collection || null,
                         chunk_size: parseInt(chunkSize) || 1000,
-                        chunk_overlap: parseInt(chunkOverlap) || 100
+                        chunk_overlap: parseInt(chunkOverlap) || 100,
                     })
                 });
-
                 const result = await response.json();
-                
                 if (response.ok) {
                     showMessage('indexMessage', '⏳ ' + result.message, 'info');
-                    // Start polling for terminal output
                     startOutputPolling();
+                    monitorIndexingStatus();
                 } else {
                     showMessage('indexMessage', '❌ ' + (result.error || result.detail || 'Indexing failed'), 'error');
                     terminalBox.classList.remove('show');
@@ -766,7 +872,7 @@
                 }
             } catch (error) {
                 showMessage('indexMessage', '❌ Connection error: ' + error.message, 'error');
-            } finally {
+                terminalBox.classList.remove('show');
                 indexBtn.disabled = false;
                 indexBtn.innerHTML = '▶️ Start Indexing';
                 progress.classList.remove('active');
@@ -775,31 +881,40 @@
 
         async function askQuestion() {
             const question = document.getElementById('question').value;
-
             if (!question.trim()) {
                 showMessage('askMessage', '❌ Please enter a question', 'error');
                 return;
             }
-
             const askBtn = document.getElementById('askBtn');
             const answerBox = document.getElementById('answerBox');
-            
             askBtn.disabled = true;
             askBtn.innerHTML = '<span class="spinner"></span> Thinking...';
             hideMessage('askMessage');
             answerBox.classList.remove('show');
-
             try {
                 const response = await fetch(`${API_BASE}/ask`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ question })
                 });
-
                 const result = await response.json();
-                
                 if (result.answer) {
-                    answerBox.textContent = result.answer;
+                    const sources = result.sources || [];
+                    let html = `<h3>Answer</h3><p>${escapeHtml(result.answer)}</p>`;
+                    if (sources.length) {
+                        html += '<div class="source-list"><h3>Sources</h3>';
+                        sources.forEach((src, idx) => {
+                            const contentPreview = (src.content || '').slice(0, 600);
+                            html += `
+                                <div class="source-item">
+                                    <strong>${escapeHtml(src.source || `Snippet ${idx + 1}`)}</strong>
+                                    <pre>${escapeHtml(contentPreview)}${src.content && src.content.length > 600 ? '\\n...' : ''}</pre>
+                                </div>
+                            `;
+                        });
+                        html += '</div>';
+                    }
+                    answerBox.innerHTML = html;
                     answerBox.classList.add('show');
                 } else if (result.error) {
                     showMessage('askMessage', '❌ ' + result.error, 'error');
@@ -812,13 +927,13 @@
             }
         }
 
-        // Allow Enter key to submit in question textarea (Ctrl+Enter)
         document.getElementById('question').addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && e.ctrlKey) {
                 askQuestion();
             }
         });
-    </script>
+    </script></script>
 </body>
 </html>
 
+</script>

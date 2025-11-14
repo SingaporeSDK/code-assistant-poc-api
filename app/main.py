@@ -1,5 +1,6 @@
 import os
 import subprocess
+from typing import Optional
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -7,15 +8,14 @@ from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-# Load environment variables from .env file FIRST (before importing rag_chain)
+# Load environment variables from .env file FIRST
 load_dotenv()
 
-# Check if key is loaded. This must be done before rag_chain initializes OpenAI
-if not os.getenv("OPENAI_API_KEY"):
-    raise EnvironmentError("OPENAI_API_KEY environment variable not set. Please check your .env file.")
-
-# Import rag_chain AFTER loading .env so the API key is available during initialization
 from .rag_chain import get_answer, list_all_document_sources
+
+LOCAL_VECTOR_STORE_PATH = os.getenv("LOCAL_VECTOR_STORE_PATH", "chroma_db")
+LOCAL_COLLECTION_NAME = os.getenv("LOCAL_COLLECTION_NAME", "code_assistant_local")
+INDEX_SCRIPT_PATH = "scripts/index_codebase.py"
 
 app = FastAPI(title="Code Assistant API")
 
@@ -38,9 +38,11 @@ app.add_middleware(
 class Question(BaseModel):
     question: str
 
+
 class IndexRequest(BaseModel):
     codebase_path: str
-    collection: str = "code_assistant_index"
+    collection: Optional[str] = None
+    output: Optional[str] = None
     chunk_size: int = 1000
     chunk_overlap: int = 100
 
@@ -57,7 +59,7 @@ def health_check():
 @app.post("/index")
 async def trigger_indexing(request: IndexRequest, background_tasks: BackgroundTasks):
     """Trigger indexing of a codebase"""
-    global indexing_in_progress
+    global indexing_in_progress, indexing_complete, current_index_mode
     
     if indexing_in_progress:
         raise HTTPException(status_code=429, detail="Indexing already in progress")
@@ -69,39 +71,52 @@ async def trigger_indexing(request: IndexRequest, background_tasks: BackgroundTa
     if not os.path.isdir(request.codebase_path):
         raise HTTPException(status_code=400, detail=f"Path is not a directory: {request.codebase_path}")
     
-    # Run indexing in background
+    payload = {
+        "script": INDEX_SCRIPT_PATH,
+        "codebase_path": request.codebase_path,
+        "collection": request.collection or LOCAL_COLLECTION_NAME,
+        "chunk_size": request.chunk_size,
+        "chunk_overlap": request.chunk_overlap,
+        "output": request.output or LOCAL_VECTOR_STORE_PATH,
+    }
+    
     indexing_in_progress = True
-    background_tasks.add_task(run_indexing_task, request)
+    indexing_complete = False
+    background_tasks.add_task(run_indexing_task, payload)
     
     return {
         "status": "started",
         "message": f"Indexing started for {request.codebase_path}. This may take a few minutes."
     }
 
-def run_indexing_task(request: IndexRequest):
+
+def run_indexing_task(payload: dict):
     """Background task to run the indexing script"""
     global indexing_in_progress, indexing_output, indexing_complete
     
     try:
-        # Clear previous output
         indexing_output = []
         indexing_complete = False
         
-        start_msg = f"{'='*60}\nStarting indexing: {request.codebase_path}\n{'='*60}"
+        start_msg = (
+            f"{'='*60}\n"
+            f"Starting indexing: {payload['codebase_path']}\n"
+            f"Collection: {payload['collection']} | Output: {payload['output']}\n"
+            f"{'='*60}"
+        )
         print(start_msg)
         indexing_output.append(start_msg)
         
-        # Build the command
         cmd = [
             "python3.9",
-            "scripts/index_codebase.py",
-            request.codebase_path,
-            "--collection", request.collection,
-            "--chunk-size", str(request.chunk_size),
-            "--chunk-overlap", str(request.chunk_overlap)
+            payload["script"],
+            payload["codebase_path"],
+            "--collection", payload["collection"],
+            "--chunk-size", str(payload["chunk_size"]),
+            "--chunk-overlap", str(payload["chunk_overlap"]),
+            "--output", payload["output"],
         ]
         
-        # Run the indexing script with real-time output capture
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -111,10 +126,9 @@ def run_indexing_task(request: IndexRequest):
             cwd=os.getcwd()
         )
         
-        # Capture output line by line
         for line in process.stdout:
             line = line.rstrip()
-            if line:  # Only add non-empty lines
+            if line:
                 print(line)
                 indexing_output.append(line)
         
@@ -144,7 +158,7 @@ def indexing_status():
     return {
         "in_progress": indexing_in_progress,
         "completed": indexing_complete,
-        "output_lines": len(indexing_output)
+        "output_lines": len(indexing_output),
     }
 
 @app.get("/index/output")
@@ -154,7 +168,7 @@ def get_indexing_output():
     return {
         "output": indexing_output,
         "in_progress": indexing_in_progress,
-        "completed": indexing_complete
+        "completed": indexing_complete,
     }
 
 @app.post("/ask")
@@ -165,8 +179,8 @@ async def ask_question(q: Question):
         if not q.question:
              raise ValueError("Question field is empty in the request body.")
 
-        answer = get_answer(q.question)
-        return {"answer": answer}
+        result = get_answer(q.question)
+        return result
     except Exception as e:
         # Log the error for debugging purposes in the terminal
         print(f"--- ERROR PROCESSING /ASK REQUEST ---")
