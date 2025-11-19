@@ -1,0 +1,229 @@
+{
+  "generatedAt": "2025-11-18T12:35:23.889Z",
+  "upstream": {
+    "carhubDb": "/Users/lalitkumarverma/projects-react/code-assistant-poc/my_codebase/mycarhub/src/db.json",
+    "analyticsGraphNamespace": "carhub"
+  },
+  "packages": [
+    {
+      "id": "svc-5b2a",
+      "vehicleId": "5b2a",
+      "package": "Hybrid Essentials",
+      "price": 580,
+      "cadence": "quarterly",
+      "workshop": "North Loop Service Center",
+      "dependencies": {
+        "uiComponent": "src/Cars.js",
+        "cardComponent": "src/CarCard.js",
+        "personaFile": "src/UserInformationContext.js"
+      },
+      "serviceTasks": [
+        "Inspect Toyota TC-2021-S2 battery health",
+        "Update telematics firmware",
+        "Run ADAS calibration",
+        "Generate report for MyCarHub dashboard"
+      ],
+      "source": "data/service_packages.json"
+    },
+    {
+      "id": "svc-7d70",
+      "vehicleId": "7d70",
+      "package": "Performance Max",
+      "price": 1470,
+      "cadence": "biannual",
+      "workshop": "Downtown EV Lab",
+      "dependencies": {
+        "uiComponent": "src/Cars.js",
+        "cardComponent": "src/CarCard.js",
+        "personaFile": "src/UserInformationContext.js"
+      },
+      "serviceTasks": [
+        "Inspect Honda HA-2022-EX battery health",
+        "Update telematics firmware",
+        "Run ADAS calibration",
+        "Generate report for MyCarHub dashboard"
+      ],
+      "source": "data/service_packages.json"
+    },
+    {
+      "id": "svc-6e6b",
+      "vehicleId": "6e6b",
+      "package": "Battery Guardian",
+      "price": 11600,
+      "cadence": "annual",
+      "workshop": "Mobile Crew",
+      "dependencies": {
+        "uiComponent": "src/Cars.js",
+        "cardComponent": "src/CarCard.js",
+        "personaFile": "src/UserInformationContext.js"
+      },
+      "serviceTasks": [
+        "Inspect Unknown ABC-123H battery health",
+        "Update telematics firmware",
+        "Run ADAS calibration",
+        "Generate report for MyCarHub dashboard"
+      ],
+      "source": "data/service_packages.json"
+    },
+    {
+      "id": "svc-9f3b",
+      "vehicleId": "9f3b",
+      "package": "Hybrid Essentials",
+      "price": 1780,
+      "cadence": "quarterly",
+      "workshop": "North Loop Service Center",
+      "dependencies": {
+        "uiComponent": "src/Cars.js",
+        "cardComponent": "src/CarCard.js",
+        "personaFile": "src/UserInformationContext.js"
+      },
+      "serviceTasks": [
+        "Inspect Chevrolet CS-2020-LTZ battery health",
+        "Update telematics firmware",
+        "Run ADAS calibration",
+        "Generate report for MyCarHub dashboard"
+      ],
+      "source": "data/service_packages.json"
+    },
+    {
+      "id": "svc-2c4d",
+      "vehicleId": "2c4d",
+      "package": "Performance Max",
+      "price": 1710,
+      "cadence": "biannual",
+      "workshop": "Downtown EV Lab",
+      "dependencies": {
+        "uiComponent": "src/Cars.js",
+        "cardComponent": "src/CarCard.js",
+        "personaFile": "src/UserInformationContext.js"
+      },
+      "serviceTasks": [
+        "Inspect Honda HCRV-2021-EXL battery health",
+        "Update telematics firmware",
+        "Run ADAS calibration",
+        "Generate report for MyCarHub dashboard"
+      ],
+      "source": "data/service_packages.json"
+    },
+    {
+      "id": "svc-5b2a",
+      "vehicleId": "5b2a",
+      "package": "Battery Guardian",
+      "price": 1160,
+      "cadence": "annual",
+      "workshop": "Mobile Crew",
+      "dependencies": {
+        "uiComponent": "src/Cars.js",
+        "cardComponent": "src/CarCard.js",
+        "personaFile": "src/UserInformationContext.js"
+      },
+      "serviceTasks": [
+        "Inspect Toyota TC-2021-SE battery health",
+        "Update telematics firmware",
+        "Run ADAS calibration",
+        "Generate report for MyCarHub dashboard"
+      ],
+      "source": "data/service_packages.json"
+    },
+    {
+      "id": "svc-3a0f",
+      "vehicleId": "3a0f",
+      "package": "Hybrid Essentials",
+      "price": 10480,
+      "cadence": "quarterly",
+      "workshop": "North Loop Service Center",
+      "dependencies": {
+        "uiComponent": "src/Cars.js",
+        "cardComponent": "src/CarCard.js",
+        "personaFile": "src/UserInformationContext.js"
+      },
+      "serviceTasks": [
+        "Inspect Ferrari F488-2021-GTB battery health",
+        "Update telematics firmware",
+        "Run ADAS calibration",
+        "Generate report for MyCarHub dashboard"
+      ],
+      "source": "data/service_packages.json"
+    },
+    {
+      "id": "svc-a5c8",
+      "vehicleId": "a5c8",
+      "package": "Performance Max",
+      "price": 1350,
+      "cadence": "biannual",
+      "workshop": "Downtown EV Lab",
+      "dependencies": {
+        "uiComponent": "src/Cars.js",
+        "cardComponent": "src/CarCard.js",
+        "personaFile": "src/UserInformationContext.js"
+      },
+      "serviceTasks": [
+        "Inspect Volkswagen VWG-2019-TSI battery health",
+        "Update telematics firmware",
+        "Run ADAS calibration",
+        "Generate report for MyCarHub dashboard"
+      ],
+      "source": "data/service_packages.json"
+    },
+    {
+      "id": "svc-8d74",
+      "vehicleId": "8d74",
+      "package": "Battery Guardian",
+      "price": 13520,
+      "cadence": "annual",
+      "workshop": "Mobile Crew",
+      "dependencies": {
+        "uiComponent": "src/Cars.js",
+        "cardComponent": "src/CarCard.js",
+        "personaFile": "src/UserInformationContext.js"
+      },
+      "serviceTasks": [
+        "Inspect Audi AR8-2022-V10 battery health",
+        "Update telematics firmware",
+        "Run ADAS calibration",
+        "Generate report for MyCarHub dashboard"
+      ],
+      "source": "data/service_packages.json"
+    },
+    {
+      "id": "svc-c660",
+      "vehicleId": "c660",
+      "package": "Hybrid Essentials",
+      "price": 0,
+      "cadence": "quarterly",
+      "workshop": "North Loop Service Center",
+      "dependencies": {
+        "uiComponent": "src/Cars.js",
+        "cardComponent": "src/CarCard.js",
+        "personaFile": "src/UserInformationContext.js"
+      },
+      "serviceTasks": [
+        "Inspect SUV ABC-123H battery health",
+        "Update telematics firmware",
+        "Run ADAS calibration",
+        "Generate report for MyCarHub dashboard"
+      ],
+      "source": "data/service_packages.json"
+    },
+    {
+      "id": "svc-74f4",
+      "vehicleId": "74f4",
+      "package": "Performance Max",
+      "price": 13800,
+      "cadence": "biannual",
+      "workshop": "Downtown EV Lab",
+      "dependencies": {
+        "uiComponent": "src/Cars.js",
+        "cardComponent": "src/CarCard.js",
+        "personaFile": "src/UserInformationContext.js"
+      },
+      "serviceTasks": [
+        "Inspect Lotus ABC-123S battery health",
+        "Update telematics firmware",
+        "Run ADAS calibration",
+        "Generate report for MyCarHub dashboard"
+      ],
+      "source": "data/service_packages.json"
+    }
+  ]
+}

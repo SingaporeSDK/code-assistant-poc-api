@@ -1,0 +1,276 @@
+{
+  "cars": [
+    {
+      "modelNumber": "TC-2021-S2",
+      "productName": "Toyota Camry",
+      "description": "A stylish sedan with a smooth ride and excellent fuel efficiency.",
+      "year": 2022,
+      "make": "Toyota",
+      "features": [
+        "Blind Spot Monitor",
+        "Heated Front Seats",
+        "Touchscreen Display",
+        "Backup Camera"
+      ],
+      "milesRun": 22000,
+      "price": 14500,
+      "images": [
+        "toyota-camry-1.png",
+        "toyota-camry-2.png"
+      ],
+      "status": "available",
+      "review": {
+        "user": "CarFanatic",
+        "rating": 4.8,
+        "comment": "A reliable and comfortable sedan with great features."
+      },
+      "id": "5b2a",
+      "category": "Sedans"
+    },
+    {
+      "modelNumber": "HA-2022-EX",
+      "productName": "Honda Accord",
+      "description": "A reliable and comfortable midsize sedan with advanced safety features.",
+      "year": 2022,
+      "make": "Honda",
+      "features": [
+        "Adaptive Cruise Control",
+        "Lane Keeping Assist",
+        "Apple CarPlay & Android Auto",
+        "Dual-zone Climate Control"
+      ],
+      "milesRun": 15000,
+      "price": 24500,
+      "images": [
+        "honda-accord-1.png"
+      ],
+      "status": "available",
+      "review": {
+        "user": "SedanLover",
+        "rating": 4.5,
+        "comment": "A great balance of comfort, technology, and reliability."
+      },
+      "id": "7d70",
+      "category": "Sedans"
+    },
+    {
+      "id": "6e6b",
+      "modelNumber": "ABC-123H",
+      "productName": "ACV BAR",
+      "description": "SOME OLD CAR",
+      "year": 2016,
+      "make": "Unknown",
+      "features": [
+        "NO FEATURE"
+      ],
+      "milesRun": 1200000,
+      "price": 145000,
+      "images": [
+        "oldcar-1",
+        "oldcar-2"
+      ],
+      "status": "sold",
+      "category": "Trucks"
+    },
+    {
+      "modelNumber": "CS-2020-LTZ",
+      "productName": "Chevy Silverado",
+      "description": "A rugged and dependable truck built for heavy-duty tasks and comfort.",
+      "year": 2020,
+      "make": "Chevrolet",
+      "features": [
+        "V8 engine",
+        "Towing package",
+        "Apple CarPlay",
+        "Heated seats"
+      ],
+      "milesRun": 29000,
+      "price": 44500,
+      "images": [
+        "chevy-silverado-1.png",
+        "chevy-silverado-2.png",
+        "chevy-silverado-3.png"
+      ],
+      "status": "available",
+      "review": {
+        "user": "TruckLover",
+        "rating": 4.8,
+        "comment": "An excellent truck with great towing capacity and comfort for long drives."
+      },
+      "id": "9f3b",
+      "category": "Trucks"
+    },
+    {
+      "modelNumber": "HCRV-2021-EXL",
+      "productName": "Honda CR-V",
+      "description": "A compact SUV offering versatility, comfort, and advanced safety features.",
+      "year": 2021,
+      "make": "Honda",
+      "features": [
+        "Honda Sensing Suite",
+        "Power tailgate",
+        "Leather-trimmed seats",
+        "Sunroof"
+      ],
+      "milesRun": 18000,
+      "price": 28500,
+      "images": [
+        "honda-crv-1.png",
+        "honda-crv-2.png",
+        "honda-crv-3.png"
+      ],
+      "status": "available",
+      "review": {
+        "user": "SUVEnthusiast",
+        "rating": 4.7,
+        "comment": "A spacious and comfortable SUV with great fuel efficiency and safety features."
+      },
+      "id": "2c4d",
+      "category": "SUVs"
+    },
+    {
+      "modelNumber": "TC-2021-SE",
+      "productName": "Toyota Camry",
+      "description": "A stylish sedan with a smooth ride and excellent fuel efficiency.",
+      "year": 2021,
+      "make": "Toyota",
+      "features": [
+        "Blind Spot Monitor",
+        "Heated Front Seats",
+        "Touchscreen Display",
+        "Backup Camera"
+      ],
+      "milesRun": 22000,
+      "price": 14500,
+      "images": [
+        "toyota-camry-1.png",
+        "toyota-camry-2.png"
+      ],
+      "status": "sold",
+      "review": {
+        "user": "CarFanatic",
+        "rating": 4.8,
+        "comment": "A reliable and comfortable sedan with great features."
+      },
+      "id": "5b2a",
+      "category": "Sedans"
+    },
+    {
+      "modelNumber": "F488-2021-GTB",
+      "productName": "Ferrari 488 GTB",
+      "description": "A breathtaking Italian sports car with a turbocharged V8 and stunning design.",
+      "year": 2021,
+      "make": "Ferrari",
+      "features": [
+        "Turbocharged V8",
+        "Carbon-ceramic brakes",
+        "F1 traction control",
+        "Premium leather interior"
+      ],
+      "milesRun": 3500,
+      "price": 262000,
+      "images": [
+        "ferrari-488-1.png",
+        "ferrari-488-2.png",
+        "ferrari-488-3.png"
+      ],
+      "status": "available",
+      "review": {
+        "user": "Anonymous",
+        "rating": 4,
+        "comment": "Great car! Smooth ride and excellent features."
+      },
+      "id": "3a0f",
+      "category": "Sports"
+    },
+    {
+      "modelNumber": "VWG-2019-TSI",
+      "productName": "Volkswagen Golf",
+      "description": "A practical and fun-to-drive hatchback with a premium feel.",
+      "year": 2019,
+      "make": "Volkswagen",
+      "features": [
+        "Turbocharged engine",
+        "Touchscreen infotainment",
+        "Rearview camera",
+        "Automatic climate control"
+      ],
+      "milesRun": 25000,
+      "price": 22500,
+      "images": [
+        "toyota-camry-1.png"
+      ],
+      "status": "available",
+      "review": {
+        "user": "CarEnthusiast",
+        "rating": 5,
+        "comment": "Excellent hatchback with great handling and comfort."
+      },
+      "id": "a5c8",
+      "category": "Hatchbacks"
+    },
+    {
+      "modelNumber": "AR8-2022-V10",
+      "productName": "Audi R8",
+      "description": "A luxury sports car with a powerful V10 engine and quattro all-wheel drive.",
+      "year": 2022,
+      "make": "Audi",
+      "features": [
+        "V10 engine",
+        "Quattro all-wheel drive",
+        "Virtual cockpit",
+        "Bang & Olufsen sound system"
+      ],
+      "milesRun": 7000,
+      "price": 169000,
+      "images": [
+        "audi-r8-1.png",
+        "audi-r8-2.png"
+      ],
+      "status": "sold",
+      "review": {
+        "user": "LuxuryCarFan",
+        "rating": 5,
+        "comment": "An incredible driving experience with unmatched luxury and performance."
+      },
+      "id": "8d74",
+      "category": "Sports"
+    },
+    {
+      "id": "c660",
+      "modelNumber": "ABC-123H",
+      "productName": "Some SUV Name",
+      "description": "Useful description ",
+      "year": 2023,
+      "make": "SUV",
+      "features": [
+        "four tyres and seats. no engine"
+      ],
+      "milesRun": 0,
+      "price": 10,
+      "images": [
+        "image-1"
+      ],
+      "status": "sold",
+      "category": "SUVs"
+    },
+    {
+      "id": "74f4",
+      "modelNumber": "ABC-123S",
+      "productName": "Sports Car",
+      "description": "My Sports Car",
+      "year": 2025,
+      "make": "Lotus",
+      "features": [
+        "- Best car"
+      ],
+      "milesRun": 1000,
+      "price": 230000,
+      "images": [
+        "image-1"
+      ],
+      "status": "available",
+      "category": "Sports"
+    }
+  ]
+}

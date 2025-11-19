@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>MyCarHub Graph Viewer</title>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+        background: #0f172a;
+        color: #e2e8f0;
+      }
+      #toolbar {
+        padding: 12px 20px;
+        border-bottom: 1px solid #1e293b;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+      #graph {
+        width: 100vw;
+        height: calc(100vh - 56px);
+      }
+      .tooltip {
+        position: absolute;
+        pointer-events: none;
+        background: rgba(15, 23, 42, 0.9);
+        color: #f8fafc;
+        padding: 8px 12px;
+        border-radius: 6px;
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        font-size: 12px;
+        max-width: 320px;
+        line-height: 1.4;
+      }
+      a {
+        color: #38bdf8;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="toolbar">
+      <div>MyCarHub Graph Viewer</div>
+      <label>
+        Endpoint:
+        <input
+          id="endpoint"
+          style="width: 360px"
+          value="http://localhost:5001/graph/nodes"
+        />
+      </label>
+      <button id="reload">Reload</button>
+      <span id="status"></span>
+    </div>
+    <svg id="graph"></svg>
+    <div class="tooltip" id="tooltip" style="opacity: 0"></div>
+
+    <script>
+      const svg = d3.select("#graph");
+      const tooltip = d3.select("#tooltip");
+      const statusLabel = document.getElementById("status");
+
+      const colorByType = {
+        FleetInventory: "#38bdf8",
+        Vehicle: "#fb7185",
+        Persona: "#facc15",
+        UIComponentSet: "#a78bfa",
+      };
+
+      const radiusByType = {
+        FleetInventory: 30,
+        Vehicle: 16,
+        Persona: 18,
+        UIComponentSet: 22,
+      };
+
+      const simulation = d3
+        .forceSimulation()
+        .force(
+          "link",
+          d3.forceLink().id((d) => d.id).distance(140)
+        )
+        .force("charge", d3.forceManyBody().strength(-320))
+        .force(
+          "center",
+          d3.forceCenter(window.innerWidth / 2, window.innerHeight / 2)
+        )
+        .force("collision", d3.forceCollide().radius((d) => radiusByType[d.type] + 8));
+
+      function resize() {
+        svg.attr("width", window.innerWidth).attr("height", window.innerHeight - 56);
+        simulation.force(
+          "center",
+          d3.forceCenter(window.innerWidth / 2, (window.innerHeight - 56) / 2)
+        );
+      }
+      window.addEventListener("resize", resize);
+      resize();
+
+      async function loadGraph() {
+        const endpoint = document.getElementById("endpoint").value;
+        statusLabel.textContent = "Loading...";
+        try {
+          const data = await d3.json(endpoint);
+          drawGraph(data);
+          statusLabel.textContent = `Loaded ${data.nodes.length} nodes / ${data.edges.length} edges`;
+        } catch (err) {
+          statusLabel.textContent = "Failed to load graph";
+          console.error(err);
+          alert("Unable to fetch graph: " + err.message);
+        }
+      }
+
+      function drawGraph(data) {
+        const linksData = (data.edges || []).map((edge) => ({
+          ...edge,
+          source: edge.from,
+          target: edge.to,
+        }));
+
+        svg.selectAll("*").remove();
+
+        const link = svg
+          .append("g")
+          .attr("stroke", "#475569")
+          .attr("stroke-opacity", 0.7)
+          .attr("stroke-width", 1.5)
+          .selectAll("line")
+          .data(linksData)
+          .enter()
+          .append("line");
+
+        const node = svg
+          .append("g")
+          .attr("stroke", "#0f172a")
+          .attr("stroke-width", 1.5)
+          .selectAll("circle")
+          .data(data.nodes)
+          .enter()
+          .append("circle")
+          .attr("r", (d) => radiusByType[d.type] || 16)
+          .attr("fill", (d) => colorByType[d.type] || "#94a3b8")
+          .call(
+            d3
+              .drag()
+              .on("start", (event, d) => {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+              })
+              .on("drag", (event, d) => {
+                d.fx = event.x;
+                d.fy = event.y;
+              })
+              .on("end", (event, d) => {
+                if (!event.active) simulation.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+              })
+          )
+          .on("mouseover", (event, d) => {
+            tooltip.style("opacity", 1).html(renderTooltip(d));
+          })
+          .on("mousemove", (event) => {
+            tooltip
+              .style("left", event.pageX + 12 + "px")
+              .style("top", event.pageY + 12 + "px");
+          })
+          .on("mouseout", () => tooltip.style("opacity", 0));
+
+        const label = svg
+          .append("g")
+          .selectAll("text")
+          .data(data.nodes)
+          .enter()
+          .append("text")
+          .text((d) => d.label)
+          .attr("fill", "#cbd5f5")
+          .attr("font-size", 12)
+          .attr("text-anchor", "middle")
+          .attr("dy", (d) => -(radiusByType[d.type] || 16) - 6);
+
+        simulation.nodes(data.nodes).on("tick", () => {
+          link
+            .attr("x1", (d) => d.source.x)
+            .attr("y1", (d) => d.source.y)
+            .attr("x2", (d) => d.target.x)
+            .attr("y2", (d) => d.target.y);
+
+          node.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
+          label.attr("x", (d) => d.x).attr("y", (d) => d.y);
+        });
+
+        simulation.force("link").links(linksData);
+        simulation.alpha(0.9).restart();
+      }
+
+      function renderTooltip(node) {
+        const entries = [
+          `<strong>${node.label}</strong>`,
+          `<div>Type: ${node.type}</div>`,
+        ];
+        if (node.source) {
+          entries.push(`<div>Source:<br/><small>${node.source}</small></div>`);
+        }
+        if (node.stats) {
+          entries.push(`<div>Stats: ${JSON.stringify(node.stats)}</div>`);
+        }
+        if (node.payload) {
+          entries.push(`<div>Payload: ${JSON.stringify(node.payload)}</div>`);
+        }
+        if (node.components) {
+          entries.push(`<div>Components: ${node.components.join(", ")}</div>`);
+        }
+        return entries.join("");
+      }
+
+      document.getElementById("reload").addEventListener("click", loadGraph);
+      loadGraph();
+    </script>
+  </body>
+</html>
+

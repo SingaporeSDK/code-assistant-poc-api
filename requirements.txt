@@ -13,7 +13,8 @@ uvicorn[standard]>=0.23.2
 # ----------------------------------------------------------------------
 langchain-core>=0.1.0
 langchain-community>=0.0.1
-langchain-openai>=0.0.1 # For using OpenAI LLM/Embeddings (Optional)
+langchain-huggingface>=0.0.7 # For local HuggingFace LLM wrappers
+langchain-openai>=0.1.0  # For OpenAI API support (backup option)
 
 # ----------------------------------------------------------------------
 # 3. EMBEDDING MODEL & VECTOR STORE
@@ -24,6 +25,10 @@ langchain-openai>=0.0.1 # For using OpenAI LLM/Embeddings (Optional)
 sentence-transformers>=2.2.2 # For local embeddings (e.g., all-MiniLM-L6-v2)
 chromadb>=0.4.15
 langchain-chroma>=0.1.0
+torch>=2.1.0
+transformers>=4.38.0
+accelerate>=0.25.0
+sentencepiece>=0.1.99
 pydantic>=2.5.2 # Used by FastAPI, LangChain, and ChromaDB
 
 # ----------------------------------------------------------------------
@@ -33,7 +38,6 @@ pydantic>=2.5.2 # Used by FastAPI, LangChain, and ChromaDB
 # The 'tiktoken' library is for token counting (used by OpenAI models).
 # ----------------------------------------------------------------------
 python-dotenv>=1.0.0
-tiktoken>=0.5.1 
 
 # ----------------------------------------------------------------------
 # 5. CODE PROCESSING (CRITICAL FOR CODE ASSISTANT)
@@ -41,3 +45,14 @@ tiktoken>=0.5.1
 # intelligent code chunking for many languages.
 # ----------------------------------------------------------------------
 Pygments>=2.17.2
+
+# ----------------------------------------------------------------------
+# 6. AWS INTEGRATION FOR REMOTE LLM INFERENCE
+# ----------------------------------------------------------------------
+boto3>=1.28.0
+
+# ----------------------------------------------------------------------
+# 7. GOOGLE CLOUD VERTEX AI INTEGRATION
+# ----------------------------------------------------------------------
+google-cloud-aiplatform>=1.38.0
+httpx>=0.25.0  # For graph API calls

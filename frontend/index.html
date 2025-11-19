@@ -271,7 +271,6 @@
             border-radius: 8px;
             margin-top: 20px;
             border-left: 4px solid #667eea;
-            white-space: pre-wrap;
             font-size: 15px;
             line-height: 1.6;
             display: none;
@@ -285,12 +284,74 @@
         .answer-box h3 {
             margin-bottom: 10px;
             color: #333;
+            font-size: 18px;
         }
 
-        .source-list {
+        .query-section {
+            background: #e8f4f8;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+
+        .query-section .query-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .query-section .query-text {
+            font-size: 16px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .answer-section {
+            margin-bottom: 25px;
+        }
+
+        .answer-section .answer-content {
+            background: #fff;
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid #e0e0e0;
+            white-space: pre-wrap;
+            line-height: 1.7;
+        }
+
+        .source-list, .graph-context-section {
+            margin-top: 25px;
+            border-top: 2px solid #e0e0e0;
+            padding-top: 20px;
+        }
+
+        .graph-context-section {
+            background: #fff3e0;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #ff9800;
             margin-top: 20px;
-            border-top: 1px solid #e0e0e0;
-            padding-top: 15px;
+        }
+
+        .graph-context-section h3 {
+            color: #e65100;
+            margin-bottom: 12px;
+        }
+
+        .graph-context-section pre {
+            background: #fff;
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid #ffe0b2;
+            font-size: 13px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            line-height: 1.6;
+            color: #5d4037;
         }
 
         .source-item {
@@ -638,12 +699,43 @@
                 >What components are in this React app?</textarea>
             </div>
 
+            <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin: 15px 0;">
+                <input type="checkbox" id="useGraphRAG" checked style="width: 18px; height: 18px; cursor: pointer;">
+                <label for="useGraphRAG" style="cursor: pointer; font-weight: 500;">Use GraphRAG (combines embeddings + graph relationships)</label>
+            </div>
+
+            <div class="form-group" style="display: flex; align-items: center; gap: 15px; margin: 15px 0;">
+                <label style="font-weight: 500;">LLM Provider:</label>
+                <select id="llmProvider" style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                    <option value="openai" selected>OpenAI API (GPT-3.5/GPT-4)</option>
+                    <option value="vertex">Google Cloud Vertex AI (Qwen)</option>
+                    <option value="sagemaker">AWS SageMaker (Qwen)</option>
+                </select>
+                <span id="providerStatus" style="font-size: 12px; color: #666;"></span>
+            </div>
+
             <button class="btn btn-primary" onclick="askQuestion()" id="askBtn">
                 🔍 Ask Question
             </button>
 
             <div id="askMessage" class="message"></div>
             <div id="answerBox" class="answer-box"></div>
+
+            <div id="queryTerminalBox" class="terminal-box" style="margin-top: 20px; display: none;">
+                <div class="terminal-header">
+                    <div class="terminal-dots">
+                        <span class="terminal-dot red"></span>
+                        <span class="terminal-dot yellow"></span>
+                        <span class="terminal-dot green"></span>
+                    </div>
+                    <div class="terminal-title">
+                        <span>📟</span>
+                        <span>Query Execution</span>
+                        <span id="queryProviderLabel" class="terminal-mode-pill">VERTEX</span>
+                    </div>
+                </div>
+                <div id="queryTerminalContent"></div>
+            </div>
         </div>
     </div>
 
@@ -675,10 +767,13 @@
             }
         });
 
-        window.addEventListener('load', () => {
+        window.addEventListener('load', async () => {
             checkServerStatus();
             loadStats();
             updateCommandPreview();
+            // Load current provider
+            const provider = await getCurrentProvider();
+            document.getElementById('llmProvider').value = provider;
         });
 
         function toggleAdvanced(e) {
@@ -879,47 +974,175 @@
             }
         }
 
+        async function getCurrentProvider() {
+            try {
+                const response = await fetch(`${API_BASE}/llm/provider`);
+                const data = await response.json();
+                return data.provider || 'openai';
+            } catch (error) {
+                console.error('Error getting provider:', error);
+                return 'openai';
+            }
+        }
+
+        async function switchProvider(provider) {
+            try {
+                const response = await fetch(`${API_BASE}/llm/provider/${provider}`, {
+                    method: 'POST'
+                });
+                const result = await response.json();
+                if (result.status === 'switched') {
+                    document.getElementById('providerStatus').textContent = `✅ Switched to ${provider}`;
+                    setTimeout(() => {
+                        document.getElementById('providerStatus').textContent = '';
+                    }, 3000);
+                } else if (result.status === 'error') {
+                    document.getElementById('providerStatus').textContent = `❌ Error: ${result.error}`;
+                }
+            } catch (error) {
+                console.error('Error switching provider:', error);
+                document.getElementById('providerStatus').textContent = `❌ Switch failed`;
+            }
+        }
+
         async function askQuestion() {
             const question = document.getElementById('question').value;
             if (!question.trim()) {
                 showMessage('askMessage', '❌ Please enter a question', 'error');
                 return;
             }
+
+            const useGraphRAG = document.getElementById('useGraphRAG').checked;
+            const provider = document.getElementById('llmProvider').value;
+            
+            // Switch provider if needed
+            const currentProvider = await getCurrentProvider();
+            if (currentProvider !== provider) {
+                await switchProvider(provider);
+            }
+
             const askBtn = document.getElementById('askBtn');
             const answerBox = document.getElementById('answerBox');
+            const queryTerminalBox = document.getElementById('queryTerminalBox');
+            const queryTerminalContent = document.getElementById('queryTerminalContent');
+            
             askBtn.disabled = true;
             askBtn.innerHTML = '<span class="spinner"></span> Thinking...';
             hideMessage('askMessage');
             answerBox.classList.remove('show');
+            
+            // Show terminal with query info
+            queryTerminalBox.style.display = 'block';
+            queryTerminalContent.innerHTML = `
+                <div class="terminal-line"><span class="terminal-prompt">$</span> Query: ${escapeHtml(question)}</div>
+                <div class="terminal-line"><span class="terminal-prompt">$</span> Method: ${useGraphRAG ? 'GraphRAG' : 'RAG'}</div>
+                <div class="terminal-line"><span class="terminal-prompt">$</span> Provider: ${provider.toUpperCase()}</div>
+                <div class="terminal-line"><span class="terminal-prompt">$</span> Executing...</div>
+                <span class="terminal-cursor"></span>
+            `;
+            document.getElementById('queryProviderLabel').textContent = provider.toUpperCase();
+
             try {
                 const response = await fetch(`${API_BASE}/ask`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ question })
+                    body: JSON.stringify({ 
+                        question,
+                        use_graph_rag: useGraphRAG
+                    })
                 });
                 const result = await response.json();
+                
+                // Update terminal with result info
+                const method = result.method || (useGraphRAG ? 'graph_rag' : 'rag');
+                const resultProvider = result.provider || provider;
+                queryTerminalContent.innerHTML += `
+                    <div class="terminal-line"><span class="terminal-prompt">$</span> Method used: ${method}</div>
+                    <div class="terminal-line"><span class="terminal-prompt">$</span> Provider: ${resultProvider}</div>
+                    ${result.nodes_found ? `<div class="terminal-line"><span class="terminal-prompt">$</span> Graph nodes found: ${result.nodes_found}</div>` : ''}
+                    <div class="terminal-line"><span class="terminal-prompt">$</span> ✅ Query completed</div>
+                `;
+
                 if (result.answer) {
                     const sources = result.sources || [];
-                    let html = `<h3>Answer</h3><p>${escapeHtml(result.answer)}</p>`;
+                    const method = result.method || (useGraphRAG ? 'graph_rag' : 'rag');
+                    const provider = result.provider || 'unknown';
+                    const question = document.getElementById('question').value;
+                    // Check if graph context exists and has meaningful content
+                    const graphContext = result.graph_context || '';
+                    const hasGraphContext = graphContext && 
+                        graphContext !== 'No graph relationships found.' && 
+                        graphContext !== 'No graph relationships found' &&
+                        graphContext !== 'Graph not available.' &&
+                        graphContext.trim().length > 0;
+                    const nodesFound = result.nodes_found || 0;
+                    
+                    let html = `
+                        <div class="query-section">
+                            <div class="query-label">📝 Your Question</div>
+                            <div class="query-text">${escapeHtml(question)}</div>
+                        </div>
+
+                        <div style="margin-bottom: 20px; padding: 12px; background: #e8f4f8; border-radius: 6px; font-size: 13px; display: flex; gap: 20px; flex-wrap: wrap;">
+                            <div>
+                                <strong>Method:</strong> ${method === 'graph_rag' ? '🕸️ GraphRAG' : '🔍 Standard RAG'}
+                            </div>
+                            <div>
+                                <strong>Provider:</strong> ${provider === 'vertex' ? '🔵 Google Cloud Vertex AI' : provider === 'openai' ? '⚪ OpenAI API' : '🟠 AWS SageMaker'}
+                            </div>
+                            ${nodesFound > 0 ? `<div><strong>Graph Nodes:</strong> ${nodesFound} found</div>` : ''}
+                        </div>
+
+                        <div class="answer-section">
+                            <h3>💡 Answer</h3>
+                            <div class="answer-content">${escapeHtml(result.answer)}</div>
+                        </div>
+                    `;
+                    
                     if (sources.length) {
-                        html += '<div class="source-list"><h3>Sources</h3>';
+                        html += '<div class="source-list"><h3>📄 Sources Used</h3>';
+                        html += `<p style="color: #666; font-size: 13px; margin-bottom: 12px;">Found ${sources.length} relevant code snippet${sources.length > 1 ? 's' : ''} from the codebase:</p>`;
                         sources.forEach((src, idx) => {
-                            const contentPreview = (src.content || '').slice(0, 600);
+                            const contentPreview = (src.content || '').slice(0, 800);
                             html += `
                                 <div class="source-item">
-                                    <strong>${escapeHtml(src.source || `Snippet ${idx + 1}`)}</strong>
-                                    <pre>${escapeHtml(contentPreview)}${src.content && src.content.length > 600 ? '\\n...' : ''}</pre>
+                                    <strong>📄 ${escapeHtml(src.source || `Snippet ${idx + 1}`)}</strong>
+                                    <pre>${escapeHtml(contentPreview)}${src.content && src.content.length > 800 ? '\\n...' : ''}</pre>
                                 </div>
                             `;
                         });
                         html += '</div>';
                     }
+                    
+                    if (hasGraphContext) {
+                        html += `
+                            <div class="graph-context-section">
+                                <h3>🕸️ Graph Context Used</h3>
+                                <p style="color: #666; font-size: 13px; margin-bottom: 12px;">
+                                    Relationships and dependencies discovered from the knowledge graph (${nodesFound} node${nodesFound !== 1 ? 's' : ''}):
+                                </p>
+                                <pre>${escapeHtml(graphContext)}</pre>
+                            </div>
+                        `;
+                    } else if (useGraphRAG) {
+                        // Show graph context section even if no context found, to explain why
+                        const noContextMsg = graphContext && graphContext.trim() ? graphContext : 'No graph relationships found for this query.';
+                        html += `
+                            <div class="graph-context-section" style="background: #f5f5f5; border-left-color: #999;">
+                                <h3 style="color: #666;">🕸️ Graph Context</h3>
+                                <p style="color: #666; font-size: 13px;">${escapeHtml(noContextMsg)} The answer was generated using code embeddings only.</p>
+                            </div>
+                        `;
+                    }
+                    
                     answerBox.innerHTML = html;
                     answerBox.classList.add('show');
                 } else if (result.error) {
+                    queryTerminalContent.innerHTML += `<div class="terminal-line" style="color: #dc3545;"><span class="terminal-prompt">$</span> ❌ Error: ${escapeHtml(result.error)}</div>`;
                     showMessage('askMessage', '❌ ' + result.error, 'error');
                 }
             } catch (error) {
+                queryTerminalContent.innerHTML += `<div class="terminal-line" style="color: #dc3545;"><span class="terminal-prompt">$</span> ❌ Connection error: ${escapeHtml(error.message)}</div>`;
                 showMessage('askMessage', '❌ Connection error: ' + error.message, 'error');
             } finally {
                 askBtn.disabled = false;

@@ -1,21 +1,124 @@
+import json
 import os
+from typing import Any, Dict, List, Optional
 
+import boto3
+from botocore.config import Config
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 from langchain_chroma import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_huggingface import HuggingFacePipeline
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, pipeline
+from langchain_core.language_models import LLM
 
 LOCAL_VECTOR_STORE_PATH = os.getenv("LOCAL_VECTOR_STORE_PATH", "chroma_db")
 LOCAL_COLLECTION_NAME = os.getenv("LOCAL_COLLECTION_NAME", "code_assistant_local")
-LOCAL_EMBEDDING_MODEL = os.getenv("LOCAL_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
-LOCAL_LLM_MODEL = os.getenv("LOCAL_LLM_MODEL", "google/flan-t5-base")
+LOCAL_EMBEDDING_MODEL = os.getenv(
+    "LOCAL_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
+)
+
+AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
+SAGEMAKER_ENDPOINT_NAME = os.getenv("SAGEMAKER_ENDPOINT_NAME")
+SAGEMAKER_ACCEPT = os.getenv("SAGEMAKER_ACCEPT", "application/json")
+SAGEMAKER_CONTENT_TYPE = os.getenv("SAGEMAKER_CONTENT_TYPE", "application/json")
+SAGEMAKER_MAX_NEW_TOKENS = int(os.getenv("SAGEMAKER_MAX_NEW_TOKENS", "512"))
+SAGEMAKER_TEMPERATURE = float(os.getenv("SAGEMAKER_TEMPERATURE", "0.2"))
+SAGEMAKER_TOP_P = float(os.getenv("SAGEMAKER_TOP_P", "0.9"))
+SAGEMAKER_STOP_SEQUENCE = os.getenv("SAGEMAKER_STOP_SEQUENCE", "")
 
 vectorstore = None
 rag_chain = None
 _local_embedder = None
-_local_llm = None
+_remote_llm = None
+
+
+class SageMakerServerlessLLM(LLM):
+    """Minimal LangChain LLM wrapper that calls a SageMaker Serverless endpoint."""
+
+    endpoint_name: str
+    region_name: str
+    max_new_tokens: int = 512
+    temperature: float = 0.2
+    top_p: float = 0.9
+    stop_sequence: Optional[str] = None
+    content_type: str = "application/json"
+    accept: str = "application/json"
+    client_kwargs: Optional[Dict[str, Any]] = None
+
+    def __init__(self, **kwargs: Any):
+        super().__init__(**kwargs)
+        client_config = Config(
+            retries={"max_attempts": 3, "mode": "standard"},
+            read_timeout=120,
+            connect_timeout=10,
+        )
+        self._client = boto3.client(
+            "sagemaker-runtime",
+            region_name=self.region_name,
+            config=client_config,
+            **(self.client_kwargs or {}),
+        )
+
+    @property
+    def _llm_type(self) -> str:
+        return "sagemaker_serverless"
+
+    def _call(self, prompt: str, stop: Optional[List[str]] = None, **kwargs: Any) -> str:
+        payload = {
+            "inputs": prompt,
+            "parameters": {
+                "max_new_tokens": kwargs.get("max_new_tokens", self.max_new_tokens),
+                "temperature": kwargs.get("temperature", self.temperature),
+                "top_p": kwargs.get("top_p", self.top_p),
+            },
+        }
+        if self.stop_sequence:
+            payload["parameters"]["stop_sequences"] = [self.stop_sequence]
+        if stop:
+            payload["parameters"]["stop_sequences"] = list(
+                set(payload["parameters"].get("stop_sequences", []) + stop)
+            )
+
+        response = self._client.invoke_endpoint(
+            EndpointName=self.endpoint_name,
+            ContentType=self.content_type,
+            Accept=self.accept,
+            Body=json.dumps(payload).encode("utf-8"),
+        )
+
+        body_str = response["Body"].read().decode("utf-8")
+        text = self._extract_text(body_str)
+        if stop:
+            text = self._enforce_stop_tokens(text, stop)
+        return text.strip()
+
+    def _extract_text(self, body: str) -> str:
+        """Best-effort parser for common HF/SageMaker response formats."""
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError:
+            return body
+
+        if isinstance(data, dict):
+            if "generated_text" in data:
+                return data["generated_text"]
+            if "outputs" in data:
+                outputs = data["outputs"]
+                if isinstance(outputs, list) and outputs:
+                    return self._extract_text(json.dumps(outputs[0]))
+        elif isinstance(data, list) and data:
+            first = data[0]
+            if isinstance(first, dict) and "generated_text" in first:
+                return first["generated_text"]
+            if isinstance(first, str):
+                return first
+        return body
+
+    @staticmethod
+    def _enforce_stop_tokens(text: str, stop_tokens: List[str]) -> str:
+        for token in stop_tokens:
+            if token and token in text:
+                text = text.split(token)[0]
+        return text
 
 CODE_QA_TEMPLATE = """
 You are an expert software developer AI assistant. Your role is to answer questions about a codebase.
@@ -47,20 +150,26 @@ def _get_embedding_model():
 
 
 def _get_llm():
-    global _local_llm
-    if _local_llm is None:
-        print(f"Loading local LLM model: {LOCAL_LLM_MODEL}")
-        tokenizer = AutoTokenizer.from_pretrained(LOCAL_LLM_MODEL)
-        model = AutoModelForSeq2SeqLM.from_pretrained(LOCAL_LLM_MODEL)
-        text2text = pipeline(
-            "text2text-generation",
-            model=model,
-            tokenizer=tokenizer,
-            max_length=512,
-            batch_size=1,
+    global _remote_llm
+    if SAGEMAKER_ENDPOINT_NAME is None:
+        raise RuntimeError(
+            "SAGEMAKER_ENDPOINT_NAME is not set. Please configure your AWS endpoint."
         )
-        _local_llm = HuggingFacePipeline(pipeline=text2text)
-    return _local_llm
+    if _remote_llm is None:
+        print(
+            f"Connecting to SageMaker endpoint '{SAGEMAKER_ENDPOINT_NAME}' in {AWS_REGION}"
+        )
+        _remote_llm = SageMakerServerlessLLM(
+            endpoint_name=SAGEMAKER_ENDPOINT_NAME,
+            region_name=AWS_REGION,
+            max_new_tokens=SAGEMAKER_MAX_NEW_TOKENS,
+            temperature=SAGEMAKER_TEMPERATURE,
+            top_p=SAGEMAKER_TOP_P,
+            stop_sequence=SAGEMAKER_STOP_SEQUENCE or None,
+            content_type=SAGEMAKER_CONTENT_TYPE,
+            accept=SAGEMAKER_ACCEPT,
+        )
+    return _remote_llm
 
 
 def initialize_rag_components():

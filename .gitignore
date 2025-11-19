@@ -26,6 +26,7 @@ wheels/
 # Environment variables
 .env
 .env.local
+.env.bak
 
 # IDE
 .vscode/
@@ -53,4 +54,8 @@ startup.log
 # Vector database artifacts
 chroma_db/
 other-embeddings/
+
+# Generated/test files
+graph.json
+nodes.json
 

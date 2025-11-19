@@ -12,6 +12,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from .rag_chain import get_answer, list_all_document_sources
+from .graph_rag import get_graph_rag_answer
+from .llm_factory import get_current_provider, reset_llm
 
 LOCAL_VECTOR_STORE_PATH = os.getenv("LOCAL_VECTOR_STORE_PATH", "chroma_db")
 LOCAL_COLLECTION_NAME = os.getenv("LOCAL_COLLECTION_NAME", "code_assistant_local")
@@ -37,6 +39,7 @@ app.add_middleware(
 
 class Question(BaseModel):
     question: str
+    use_graph_rag: bool = True  # Use GraphRAG by default
 
 
 class IndexRequest(BaseModel):
@@ -53,8 +56,64 @@ def home():
 
 @app.get("/health")
 def health_check():
-    """Health check endpoint"""
-    return {"status": "ok", "message": "Code Assistant Backend is running."}
+    """Health check endpoint to diagnose system status."""
+    status = {
+        "status": "ok",
+        "checks": {}
+    }
+    
+    # Check vector store
+    try:
+        from .graph_rag import vectorstore
+        if vectorstore is None:
+            status["checks"]["vectorstore"] = {"status": "not_initialized", "message": "Vector store not initialized"}
+        else:
+            try:
+                count = vectorstore._collection.count()
+                status["checks"]["vectorstore"] = {"status": "ok", "document_count": count}
+            except Exception as e:
+                status["checks"]["vectorstore"] = {"status": "error", "message": str(e)}
+    except Exception as e:
+        status["checks"]["vectorstore"] = {"status": "error", "message": str(e)}
+    
+    # Check graph loader
+    try:
+        from .graph_loader import get_graph_loader
+        graph_loader = get_graph_loader()
+        if graph_loader.is_loaded():
+            node_count = len(graph_loader.nodes)
+            edge_count = len(graph_loader.edges)
+            status["checks"]["graph"] = {"status": "ok", "nodes": node_count, "edges": edge_count}
+        else:
+            status["checks"]["graph"] = {"status": "not_loaded", "message": f"Graph not loaded. Check {graph_loader.graph_url}"}
+    except Exception as e:
+        status["checks"]["graph"] = {"status": "error", "message": str(e)}
+    
+    # Check LLM
+    try:
+        from .llm_factory import get_llm, get_current_provider
+        provider = get_current_provider()
+        llm = get_llm()
+        status["checks"]["llm"] = {"status": "ok", "provider": provider}
+    except Exception as e:
+        status["checks"]["llm"] = {"status": "error", "message": str(e)}
+    
+    # Check GraphRAG chain
+    try:
+        from .graph_rag import graph_rag_chain
+        if not graph_rag_chain:
+            status["checks"]["graphrag"] = {"status": "not_initialized", "message": "GraphRAG chain not initialized"}
+        else:
+            status["checks"]["graphrag"] = {"status": "ok"}
+    except Exception as e:
+        status["checks"]["graphrag"] = {"status": "error", "message": str(e)}
+    
+    # Overall status
+    all_ok = all(check.get("status") == "ok" for check in status["checks"].values())
+    if not all_ok:
+        status["status"] = "degraded"
+    
+    return status
 
 @app.post("/index")
 async def trigger_indexing(request: IndexRequest, background_tasks: BackgroundTasks):
@@ -173,13 +232,28 @@ def get_indexing_output():
 
 @app.post("/ask")
 async def ask_question(q: Question):
-    """Ask a question about the indexed codebase"""
+    """Ask a question about the indexed codebase using GraphRAG or standard RAG"""
     try:
         # A check to ensure Pydantic model parsing succeeded
         if not q.question:
              raise ValueError("Question field is empty in the request body.")
 
-        result = get_answer(q.question)
+        # Use GraphRAG by default, fallback to standard RAG
+        if q.use_graph_rag:
+            try:
+                result = get_graph_rag_answer(q.question)
+                result["method"] = "graph_rag"
+                result["provider"] = get_current_provider()
+            except Exception as graph_error:
+                print(f"⚠️ GraphRAG failed, falling back to standard RAG: {graph_error}")
+                result = get_answer(q.question)
+                result["method"] = "rag"
+                result["provider"] = get_current_provider()
+        else:
+            result = get_answer(q.question)
+            result["method"] = "rag"
+            result["provider"] = get_current_provider()
+
         return result
     except Exception as e:
         # Log the error for debugging purposes in the terminal
@@ -193,3 +267,25 @@ async def ask_question(q: Question):
 def debug_document_list():
     """Lists the source metadata for all documents currently in the vector store."""
     return list_all_document_sources()
+
+@app.get("/llm/provider")
+def get_llm_provider():
+    """Get the current LLM provider."""
+    return {"provider": get_current_provider()}
+
+@app.post("/llm/provider/{provider}")
+def set_llm_provider(provider: str):
+    """Switch LLM provider (vertex, sagemaker, or openai)."""
+    if provider.lower() not in ["vertex", "sagemaker", "openai"]:
+        raise HTTPException(status_code=400, detail="Provider must be 'vertex', 'sagemaker', or 'openai'")
+    
+    reset_llm()
+    os.environ["LLM_PROVIDER"] = provider.lower()
+    
+    # Re-initialize GraphRAG with new provider
+    from .graph_rag import initialize_graph_rag
+    try:
+        initialize_graph_rag()
+        return {"status": "switched", "provider": provider.lower()}
+    except Exception as e:
+        return {"status": "error", "provider": provider.lower(), "error": str(e)}
