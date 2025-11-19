@@ -707,7 +707,8 @@
             <div class="form-group" style="display: flex; align-items: center; gap: 15px; margin: 15px 0;">
                 <label style="font-weight: 500;">LLM Provider:</label>
                 <select id="llmProvider" style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
-                    <option value="openai" selected>OpenAI API (GPT-3.5/GPT-4)</option>
+                    <option value="ollama" selected>Local (Ollama · Llama 3.1 8B)</option>
+                    <option value="openai">OpenAI API (GPT-3.5/GPT-4)</option>
                     <option value="vertex">Google Cloud Vertex AI (Qwen)</option>
                     <option value="sagemaker">AWS SageMaker (Qwen)</option>
                 </select>
@@ -731,7 +732,7 @@
                     <div class="terminal-title">
                         <span>📟</span>
                         <span>Query Execution</span>
-                        <span id="queryProviderLabel" class="terminal-mode-pill">VERTEX</span>
+                        <span id="queryProviderLabel" class="terminal-mode-pill">LOCAL</span>
                     </div>
                 </div>
                 <div id="queryTerminalContent"></div>
@@ -741,6 +742,20 @@
 
     <script>
         const API_BASE = 'http://localhost:8000';
+        const PROVIDER_METADATA = {
+            ollama: { label: '💻 Local (Ollama · Llama 3.1 8B)', badge: 'LOCAL' },
+            openai: { label: '⚪ OpenAI API', badge: 'OPENAI' },
+            vertex: { label: '🔵 Google Cloud Vertex AI', badge: 'VERTEX' },
+            sagemaker: { label: '🟠 AWS SageMaker', badge: 'SAGEMAKER' },
+        };
+
+        function formatProviderLabel(provider) {
+            return PROVIDER_METADATA[provider]?.label || provider.toUpperCase();
+        }
+
+        function formatProviderBadge(provider) {
+            return PROVIDER_METADATA[provider]?.badge || provider.toUpperCase();
+        }
         const INDEX_SCRIPT = 'scripts/index_codebase.py';
         const DEFAULT_COLLECTION = 'code_assistant_local';
         const DEFAULT_OUTPUT = './chroma_db';
@@ -978,10 +993,10 @@
             try {
                 const response = await fetch(`${API_BASE}/llm/provider`);
                 const data = await response.json();
-                return data.provider || 'openai';
+                return data.provider || 'ollama';
             } catch (error) {
                 console.error('Error getting provider:', error);
-                return 'openai';
+                return 'ollama';
             }
         }
 
@@ -1040,7 +1055,7 @@
                 <div class="terminal-line"><span class="terminal-prompt">$</span> Executing...</div>
                 <span class="terminal-cursor"></span>
             `;
-            document.getElementById('queryProviderLabel').textContent = provider.toUpperCase();
+            document.getElementById('queryProviderLabel').textContent = formatProviderBadge(provider);
 
             try {
                 const response = await fetch(`${API_BASE}/ask`, {
@@ -1056,9 +1071,10 @@
                 // Update terminal with result info
                 const method = result.method || (useGraphRAG ? 'graph_rag' : 'rag');
                 const resultProvider = result.provider || provider;
+                const friendlyProvider = formatProviderLabel(resultProvider);
                 queryTerminalContent.innerHTML += `
                     <div class="terminal-line"><span class="terminal-prompt">$</span> Method used: ${method}</div>
-                    <div class="terminal-line"><span class="terminal-prompt">$</span> Provider: ${resultProvider}</div>
+                    <div class="terminal-line"><span class="terminal-prompt">$</span> Provider: ${friendlyProvider}</div>
                     ${result.nodes_found ? `<div class="terminal-line"><span class="terminal-prompt">$</span> Graph nodes found: ${result.nodes_found}</div>` : ''}
                     <div class="terminal-line"><span class="terminal-prompt">$</span> ✅ Query completed</div>
                 `;
@@ -1088,7 +1104,7 @@
                                 <strong>Method:</strong> ${method === 'graph_rag' ? '🕸️ GraphRAG' : '🔍 Standard RAG'}
                             </div>
                             <div>
-                                <strong>Provider:</strong> ${provider === 'vertex' ? '🔵 Google Cloud Vertex AI' : provider === 'openai' ? '⚪ OpenAI API' : '🟠 AWS SageMaker'}
+                                <strong>Provider:</strong> ${formatProviderLabel(provider)}
                             </div>
                             ${nodesFound > 0 ? `<div><strong>Graph Nodes:</strong> ${nodesFound} found</div>` : ''}
                         </div>

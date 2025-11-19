@@ -2,7 +2,7 @@
 LLM Factory Module
 
 Provides unified interface for switching between different LLM providers
-(Google Cloud Vertex AI, AWS SageMaker, OpenAI).
+(Local Ollama, Google Cloud Vertex AI, AWS SageMaker, OpenAI).
 """
 import os
 from typing import Optional
@@ -10,9 +10,12 @@ from typing import Optional
 from .rag_chain import SageMakerServerlessLLM, _get_llm as _get_sagemaker_llm
 from .vertex_llm import create_vertex_llm, VertexAIQwenLLM
 
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai").lower()  # Default to OpenAI as backup
-
 _llm_instance = None
+
+
+def _get_configured_provider() -> str:
+    """Read provider from env (default to local Ollama)."""
+    return os.getenv("LLM_PROVIDER", "ollama").lower()
 
 
 def _get_openai_llm():
@@ -40,6 +43,31 @@ def _get_openai_llm():
     )
 
 
+def _get_ollama_llm():
+    """Create a ChatOllama instance for local inference."""
+    try:
+        from langchain_community.chat_models import ChatOllama
+    except ImportError as exc:
+        raise ImportError(
+            "langchain-community is required for the Ollama provider. "
+            "Reinstall requirements.txt or run: pip install langchain-community"
+        ) from exc
+
+    model_name = os.getenv("OLLAMA_MODEL_NAME", "llama3.1:8b-instruct-q4_1")
+    base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    temperature = float(os.getenv("OLLAMA_TEMPERATURE", "0.1"))
+    num_ctx = int(os.getenv("OLLAMA_CONTEXT", "8192"))
+    keep_alive = os.getenv("OLLAMA_KEEP_ALIVE", "5m")
+
+    return ChatOllama(
+        model=model_name,
+        base_url=base_url,
+        temperature=temperature,
+        num_ctx=num_ctx,
+        keep_alive=keep_alive,
+    )
+
+
 def get_llm(provider: Optional[str] = None):
     """
     Get LLM instance based on configured provider.
@@ -51,7 +79,7 @@ def get_llm(provider: Optional[str] = None):
         LangChain LLM instance
     """
     global _llm_instance
-    provider = (provider or LLM_PROVIDER).lower()
+    provider = (provider or _get_configured_provider()).lower()
 
     if provider == "vertex":
         if _llm_instance is None or not isinstance(_llm_instance, VertexAIQwenLLM):
@@ -77,9 +105,19 @@ def get_llm(provider: Optional[str] = None):
             print(f"✅ OpenAI LLM ready: {model_name}")
         return _llm_instance
 
+    elif provider == "ollama":
+        from langchain_community.chat_models import ChatOllama
+
+        if _llm_instance is None or not isinstance(_llm_instance, ChatOllama):
+            print("💻 Initializing local Ollama LLM...")
+            _llm_instance = _get_ollama_llm()
+            model_name = os.getenv("OLLAMA_MODEL_NAME", "llama3.1:8b-instruct-q4_1")
+            print(f"✅ Ollama LLM ready: {model_name}")
+        return _llm_instance
+
     else:
         raise ValueError(
-            f"Unknown LLM provider: {provider}. Use 'vertex', 'sagemaker', or 'openai'"
+            f"Unknown LLM provider: {provider}. Use 'ollama', 'vertex', 'sagemaker', or 'openai'"
         )
 
 
@@ -91,5 +129,5 @@ def reset_llm():
 
 def get_current_provider() -> str:
     """Get the currently configured provider."""
-    return LLM_PROVIDER
+    return _get_configured_provider()
 

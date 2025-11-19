@@ -68,7 +68,7 @@ A sophisticated Retrieval-Augmented Generation (RAG) system enhanced with **Grap
 - **Purpose**: Single-page web application for interactive querying
 - **Features**:
   - Real-time query execution display
-  - Provider selection (OpenAI, Vertex AI, SageMaker)
+  - Provider selection (Local Ollama, OpenAI, Vertex AI, SageMaker)
   - GraphRAG toggle (combines embeddings + graph relationships)
   - Comprehensive result display (answer, sources, graph context)
   - Method and provider indicators
@@ -108,6 +108,7 @@ A sophisticated Retrieval-Augmented Generation (RAG) system enhanced with **Grap
 #### 4. **Generation Layer** (`app/llm_factory.py`)
 - **Unified Interface**: Single entry point for all LLM providers
 - **Providers**:
+  - **Local (Ollama)**: Apple Silicon-ready models such as `llama3.1:8b-instruct-q4_1`
   - **OpenAI API** (`ChatOpenAI`): GPT-3.5/GPT-4 models
   - **Google Cloud Vertex AI** (`app/vertex_llm.py`): Qwen models via Vertex AI
   - **AWS SageMaker** (`app/rag_chain.py`): Qwen models via Serverless Inference
@@ -243,7 +244,8 @@ The indexer automatically detects and processes:
 - Python 3.9+ (3.9 recommended for compatibility)
 - Node.js 14+ (for Graph Analytics API)
 - pip package manager
-- LLM provider credentials (at least one):
+- LLM provider available locally or via cloud (pick what fits your hardware):
+  - Ollama (Apple Silicon / local GPUs) for offline mode
   - OpenAI API key (recommended for quick start)
   - Google Cloud project with Vertex AI enabled (optional)
   - AWS account with SageMaker endpoint (optional)
@@ -261,21 +263,27 @@ pip install -r requirements.txt
 Create `.env` file in project root:
 
 ```bash
-# LLM Provider (choose one: openai, vertex, sagemaker)
-LLM_PROVIDER=openai
+# LLM Provider (default: local Ollama for Apple Silicon / M-series)
+LLM_PROVIDER=ollama
 
-# OpenAI Configuration (required if using OpenAI)
+# Local Ollama configuration (install via https://ollama.com/download)
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL_NAME=llama3.1:8b-instruct-q4_1
+OLLAMA_TEMPERATURE=0.1
+OLLAMA_CONTEXT=8192
+
+# OpenAI Configuration (optional backup provider)
 OPENAI_API_KEY=sk-proj-...
-OPENAI_MODEL_NAME=gpt-3.5-turbo  # Optional, defaults to gpt-3.5-turbo
-OPENAI_TEMPERATURE=0.2  # Optional, defaults to 0.2
+OPENAI_MODEL_NAME=gpt-3.5-turbo
+OPENAI_TEMPERATURE=0.2
 
-# Google Cloud Vertex AI (required if using Vertex AI)
+# Google Cloud Vertex AI (optional, for hosted Qwen)
 GCP_PROJECT_ID=your-project-id
 GCP_REGION=us-central1
 VERTEX_MODEL_NAME=qwen-2.5-7b-instruct
 VERTEX_LOCATION=us-central1
 
-# AWS SageMaker (required if using SageMaker)
+# AWS SageMaker (optional, for hosted Qwen)
 AWS_REGION=us-east-1
 SAGEMAKER_ENDPOINT_NAME=your-endpoint-name
 SAGEMAKER_MAX_NEW_TOKENS=2048
@@ -286,14 +294,30 @@ SAGEMAKER_TOP_P=0.9
 GRAPH_API_URL=http://localhost:5001/graph/nodes
 
 # RAG Settings
-RAG_K=10  # Top K code chunks to retrieve
-GRAPH_DEPTH=2  # Graph traversal depth
-GRAPH_MAX_NODES=20  # Maximum related nodes to include
+RAG_K=10
+GRAPH_DEPTH=2
+GRAPH_MAX_NODES=20
 
 # Vector Store
 LOCAL_VECTOR_STORE_PATH=chroma_db
 LOCAL_COLLECTION_NAME=code_assistant_local
 ```
+
+#### Apple Silicon (M3/M2) Local LLM Setup
+1. **Install Ollama** (runs optimized models locally):
+   ```bash
+   brew install ollama
+   ollama serve  # keep running in a separate terminal
+   ```
+2. **Pull the recommended model** (fits comfortably on M3 and delivers strong code answers):
+   ```bash
+   ollama pull llama3.1:8b-instruct-q4_1
+   ```
+3. **Verify** the model responds locally:
+   ```bash
+   ollama run llama3.1:8b-instruct-q4_1 "Summarize this repo."
+   ```
+4. **Start the backend** (it will now default to the local model because `LLM_PROVIDER=ollama`).
 
 #### 3. Start Services
 
