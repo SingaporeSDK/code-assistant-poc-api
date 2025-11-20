@@ -275,9 +275,12 @@ def get_llm_provider():
 
 @app.post("/llm/provider/{provider}")
 def set_llm_provider(provider: str):
-    """Switch LLM provider (vertex, sagemaker, or openai)."""
-    if provider.lower() not in ["vertex", "sagemaker", "openai"]:
-        raise HTTPException(status_code=400, detail="Provider must be 'vertex', 'sagemaker', or 'openai'")
+    """Switch LLM provider (ollama, vertex, sagemaker, or openai)."""
+    if provider.lower() not in ["ollama", "vertex", "sagemaker", "openai"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Provider must be 'ollama', 'vertex', 'sagemaker', or 'openai'",
+        )
     
     reset_llm()
     os.environ["LLM_PROVIDER"] = provider.lower()

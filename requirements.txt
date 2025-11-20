@@ -15,6 +15,7 @@ langchain-core>=0.1.0
 langchain-community>=0.0.1
 langchain-huggingface>=0.0.7 # For local HuggingFace LLM wrappers
 langchain-openai>=0.1.0  # For OpenAI API support (backup option)
+ollama>=0.2.0  # Python client + bindings for local Ollama server
 
 # ----------------------------------------------------------------------
 # 3. EMBEDDING MODEL & VECTOR STORE

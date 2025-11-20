@@ -198,7 +198,7 @@ def initialize_graph_rag():
 
         # Get LLM instance (verify it can be created, but don't test call it)
         # The actual call will happen in get_graph_rag_answer() and errors will be handled there
-        print(f"🤖 Initializing LLM ({os.getenv('LLM_PROVIDER', 'vertex')})...")
+        print(f"🤖 Initializing LLM ({os.getenv('LLM_PROVIDER', 'ollama')})...")
         try:
             llm = get_llm()
             # Just verify it's created successfully, don't make a test call
